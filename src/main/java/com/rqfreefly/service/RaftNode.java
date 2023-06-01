@@ -1,6 +1,5 @@
 package com.rqfreefly.service;
 
-import com.alipay.remoting.exception.RemotingException;
 import com.rqfreefly.service.config.RaftConfig;
 import com.rqfreefly.service.constant.Command;
 import com.rqfreefly.service.constant.CommandType;
@@ -8,12 +7,11 @@ import com.rqfreefly.service.constant.NodeStatus;
 import com.rqfreefly.service.statemachine.StateMachine;
 import com.rqfreefly.service.log.LogEntry;
 import com.rqfreefly.service.log.LogModule;
-import com.rqfreefly.service.proto.*;
+import com.rqfreefly.service.entity.*;
 import com.rqfreefly.service.rpc.RpcClient;
 import com.rqfreefly.service.rpc.RpcServer;
 import io.netty.util.internal.StringUtil;
 import lombok.extern.slf4j.Slf4j;
-import com.rqfreefly.service.proto.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -129,7 +127,7 @@ public class RaftNode {
     /**
      * 初始化线程池
      */
-    private void threadPoolInit(){
+    private void threadPoolInit() {
 
         // 线程池参数
         int cup = Runtime.getRuntime().availableProcessors();
@@ -410,13 +408,13 @@ public class RaftNode {
     /**
      * 发起选举
      */
-    class ElectionTask implements Runnable{
+    class ElectionTask implements Runnable {
 
         @Override
         public void run() {
 
             // leader状态下不允许发起选举
-            if (status == NodeStatus.LEADER){
+            if (status == NodeStatus.LEADER) {
                 return;
             }
 
@@ -490,7 +488,7 @@ public class RaftNode {
             for (Future<VoteResult> future : futureList) {
                 try {
                     VoteResult result = null;
-                    if (future.isDone()){
+                    if (future.isDone()) {
                         result = future.get();
                     }
                     if (result == null) {
@@ -528,7 +526,7 @@ public class RaftNode {
                 // 启动心跳任务
                 heartBeatFuture = ss.scheduleWithFixedDelay(heartBeatTask, 0, heartBeatInterval, TimeUnit.MILLISECONDS);
                 // 初始化
-                if (leaderInit()){
+                if (leaderInit()) {
                     log.warn("become leader with {} votes", votes);
                 } else {
                     // 重新选举
@@ -684,9 +682,9 @@ public class RaftNode {
             int success = getReplicationResult(futureList);
 
             //  心跳响应成功，通知阻塞的线程
-            if (waitThread != null){
+            if (waitThread != null) {
                 if (success * 2 >= peerAddrs.size()) {
-                    synchronized (consistencySignal){
+                    synchronized (consistencySignal) {
                         consistencySignal.notify();
                     }
                 } else {
@@ -702,7 +700,7 @@ public class RaftNode {
      * 变为跟随者时停止心跳任务
      */
     private void stopHeartBeat() {
-        if(heartBeatFuture != null){
+        if(heartBeatFuture != null) {
             heartBeatFuture.cancel(true);
             heartBeatFuture = null;
         }
@@ -773,7 +771,7 @@ public class RaftNode {
                         nextIndexes.put(peer, entry.getIndex() + 1);
                         semaphore.release();
                         return true;
-                    } else  {
+                    } else {
                         // 失败情况1：对方任期比我大，转变成跟随者
                         if (result.getTerm() > term) {
                             log.warn("follower [{}] term [{}], my term = [{}], so I will become follower",

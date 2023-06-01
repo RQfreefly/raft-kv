@@ -2,8 +2,8 @@ package com.rqfreefly.service.rpc;
 
 import com.alipay.remoting.exception.RemotingException;
 import lombok.extern.slf4j.Slf4j;
-import com.rqfreefly.service.proto.Request;
-import com.rqfreefly.service.proto.Response;
+import com.rqfreefly.service.entity.Request;
+import com.rqfreefly.service.entity.Response;
 
 /**
  * RPC 客户端

@@ -1,8 +1,8 @@
 package com.rqfreefly.client;
 
-import com.rqfreefly.service.proto.ClientRequest;
-import com.rqfreefly.service.proto.ClientResponse;
-import com.rqfreefly.service.proto.Request;
+import com.rqfreefly.service.entity.ClientRequest;
+import com.rqfreefly.service.entity.ClientResponse;
+import com.rqfreefly.service.entity.Request;
 import com.rqfreefly.service.rpc.RpcClient;
 
 import java.util.ArrayList;

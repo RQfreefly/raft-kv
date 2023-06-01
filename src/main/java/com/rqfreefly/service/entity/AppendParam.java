@@ -1,4 +1,4 @@
-package com.rqfreefly.service.proto;
+package com.rqfreefly.service.entity;
 
 import lombok.Builder;
 import lombok.Getter;

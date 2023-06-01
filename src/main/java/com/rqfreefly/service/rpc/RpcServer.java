@@ -2,10 +2,9 @@ package com.rqfreefly.service.rpc;
 
 import com.alipay.remoting.BizContext;
 import com.alipay.remoting.rpc.protocol.SyncUserProcessor;
-import com.rqfreefly.service.proto.*;
+import com.rqfreefly.service.entity.*;
 import lombok.extern.slf4j.Slf4j;
 import com.rqfreefly.service.RaftNode;
-import com.rqfreefly.service.proto.*;
 
 
 @Slf4j

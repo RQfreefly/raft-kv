@@ -1,11 +1,10 @@
 package com.rqfreefly.service.constant;
 
-
+/**
+ * 节点状态定义
+ */
 public enum NodeStatus {
 
-    /**
-     * 节点状态定义
-     */
     FOLLOWER,
     CANDIDATE,
     LEADER;
