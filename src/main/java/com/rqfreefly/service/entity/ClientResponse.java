@@ -16,9 +16,9 @@ public class ClientResponse implements Serializable {
 
     /**
      * 响应码
-     * ok -- 0
-     * fail -- -1
-     * redirect -- 1
+     * ok：0
+     * fail：-1
+     * redirect：1
      */
     int code;
 

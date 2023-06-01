@@ -32,7 +32,7 @@ public class AppendParam implements Serializable {
     /** prevLogIndex 条目的任期号  */
     private long preLogTerm;
 
-    /** 准备存储的日志条目（表示心跳时为空；一次性发送多个是为了提高效率） */
+    /** 准备存储的日志条目（表示心跳时为空，一次性发送多个是为了提高效率） */
     private LogEntry[] entries;
 
     /** 领导人已经提交的日志的索引值  */

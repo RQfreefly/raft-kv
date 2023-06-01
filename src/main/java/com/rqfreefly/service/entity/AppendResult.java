@@ -46,7 +46,7 @@ public class AppendResult implements Serializable {
         return new AppendResult(true);
     }
 
-    public static Builder newBuilder() {
+    public static Builder builder() {
         return new Builder();
     }
 

@@ -20,10 +20,6 @@ public class Request implements Serializable {
     public static final int A_ENTRIES = 1;
     /** 客户端 */
     public static final int CLIENT_REQ = 2;
-    /** 配置变更：add */
-    public static final int CHANGE_CONFIG_ADD = 3;
-    /** 配置变更：remove */
-    public static final int CHANGE_CONFIG_REMOVE = 4;
 
     /** 请求类型 */
     private int cmd = -1;

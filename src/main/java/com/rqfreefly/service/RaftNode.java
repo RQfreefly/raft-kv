@@ -25,14 +25,19 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 @Slf4j
 public class RaftNode {
 
+    /** 心跳间隔 */
     private int heartBeatInterval;
 
+    /** 选举超时时间 */
     private int electionTimeout;
 
+    /** 当前节点角色状态 */
     private volatile NodeStatus status;
 
+    /** 当前节点任期 */
     private volatile long term;
 
+    /** 当前节点的投票对象 */
     private volatile String votedFor;
 
     /** 领导者地址 */
@@ -60,8 +65,8 @@ public class RaftNode {
     StateMachine stateMachine;
 
     /** 线程池 */
-    private ScheduledExecutorService ss;
-    private ThreadPoolExecutor te;
+    private ScheduledExecutorService scheduledExecutorService;
+    private ThreadPoolExecutor threadPoolExecutor;
 
     /** 定时任务 */
     HeartBeatTask heartBeatTask;
@@ -89,7 +94,7 @@ public class RaftNode {
     /** 领导者初始化信号 */
     private boolean leaderInitializing;
 
-    public RaftNode(){
+    public RaftNode() {
         logModule = LogModule.getInstance();
         stateMachine = StateMachine.getInstance();
         setConfig();
@@ -98,9 +103,9 @@ public class RaftNode {
     }
 
     /**
-     * 设置参数
+     * 参数设置
      */
-    private void setConfig(){
+    private void setConfig() {
         heartBeatInterval = RaftConfig.heartBeatInterval;
         electionTimeout = RaftConfig.electionTimeout;
         updatePreElectionTime();
@@ -113,12 +118,15 @@ public class RaftNode {
         peerAddrs = RaftConfig.getList();
         peerAddrs.remove(myAddr);
         LogEntry last = logModule.getLast();
-        if (last != null){
+        if (last != null) {
             term = last.getTerm();
         }
         waitThread = null;
     }
 
+    /**
+     * 更新上次选举的时间
+     */
     private void updatePreElectionTime() {
         preElectionTime = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(20) * 100;
     }
@@ -128,23 +136,22 @@ public class RaftNode {
      * 初始化线程池
      */
     private void threadPoolInit() {
-
         // 线程池参数
         int cup = Runtime.getRuntime().availableProcessors();
         int maxPoolSize = cup * 2;
         final int queueSize = 1024;
         final long keepTime = 1000 * 60;
 
-        ss = new ScheduledThreadPoolExecutor(cup);
-        te = new ThreadPoolExecutor(
+        scheduledExecutorService = new ScheduledThreadPoolExecutor(cup);
+        threadPoolExecutor = new ThreadPoolExecutor(
                 cup,
                 maxPoolSize,
                 keepTime,
                 TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<Runnable>(queueSize));
+                new LinkedBlockingQueue<>(queueSize));
         heartBeatTask = new HeartBeatTask();
         electionTask = new ElectionTask();
-        ss.scheduleAtFixedRate(electionTask, 3000, 100, TimeUnit.MILLISECONDS);
+        scheduledExecutorService.scheduleAtFixedRate(electionTask, 3000, 100, TimeUnit.MILLISECONDS);
     }
 
 
@@ -154,7 +161,7 @@ public class RaftNode {
     public VoteResult requestVote(VoteParam param) {
         updatePreElectionTime();
         try {
-            VoteResult.Builder builder = VoteResult.newBuilder();
+            VoteResult.Builder builder = VoteResult.builder();
             voteLock.lock();
 
             // 对方任期没有自己新
@@ -204,7 +211,7 @@ public class RaftNode {
     /**
      * 处理来自其它节点的非选举请求（心跳或追加日志）
      */
-    public AppendResult appendEntries(AppendParam param){
+    public AppendResult appendEntries(AppendParam param) {
         updatePreElectionTime();
         preHeartBeatTime = System.currentTimeMillis();
         AppendResult result = AppendResult.fail();
@@ -233,17 +240,18 @@ public class RaftNode {
 
             //心跳
             if (param.getEntries() == null || param.getEntries().length == 0) {
-//                log.info("receive heartbeat from node {}, term : {}",
-//                        param.getLeaderId(), param.getTerm());
                 // 旧日志提交
                 long nextCommit = getCommitIndex() + 1;
                 while (nextCommit <= param.getLeaderCommit()
-                        && logModule.read(nextCommit) != null){
+                        && logModule.read(nextCommit) != null) {
                     stateMachine.apply(logModule.read(nextCommit));
                     nextCommit++;
                 }
                 setCommitIndex(nextCommit - 1);
-                return AppendResult.newBuilder().term(term).success(true).build();
+                return AppendResult.builder().
+                        term(term).
+                        success(true).
+                        build();
             }
 
             // 1. preLog匹配判断
@@ -294,26 +302,26 @@ public class RaftNode {
     /**
      * 处理客户端请求
      */
-    public synchronized ClientResponse propose(ClientRequest request){
+    public synchronized ClientResponse propose(ClientRequest request) {
         log.info("handlerClientRequest handler {} operation, key: [{}], value: [{}]",
                 ClientRequest.Type.value(request.getType()), request.getKey(), request.getValue());
 
         if (status == NodeStatus.FOLLOWER) {
             log.warn("redirect to leader: {}", leader);
             return redirect(request);
-        } else if (status == NodeStatus.CANDIDATE){
+        } else if (status == NodeStatus.CANDIDATE) {
             log.warn("candidate declines client request: {} ", request);
             return ClientResponse.fail();
         }
 
-        if (leaderInitializing){
+        if (leaderInitializing) {
             log.error("the leader is initializing, please try again later");
             return ClientResponse.fail();
         }
 
         // 读操作
         if (request.getType() == ClientRequest.GET) {
-            synchronized (consistencySignal){
+            synchronized (consistencySignal) {
                 try {
                     // 等待一个心跳周期，以保证当前领导者有效
                     waitThread = Thread.currentThread();
@@ -333,7 +341,7 @@ public class RaftNode {
         }
 
         // 幂等性判断
-        if (stateMachine.getString(request.getRequestId()) != null){
+        if (stateMachine.getString(request.getRequestId()) != null) {
             log.info("request have been ack");
             return ClientResponse.ok();
         }
@@ -375,7 +383,7 @@ public class RaftNode {
         if (success * 2 >= peerAddrs.size()) {
             // 更新
             setCommitIndex(logEntry.getIndex());
-            //  应用到状态机
+            // 应用到状态机
             stateMachine.apply(logEntry);
             log.info("successfully commit, logEntry info: {}", logEntry);
             // 返回成功.
@@ -396,7 +404,7 @@ public class RaftNode {
      * @return
      */
     public ClientResponse redirect(ClientRequest request){
-        if (status == NodeStatus.FOLLOWER && !StringUtil.isNullOrEmpty(leader)){
+        if (status == NodeStatus.FOLLOWER && !StringUtil.isNullOrEmpty(leader)) {
             return ClientResponse.redirect(leader);
         } else {
             return ClientResponse.fail();
@@ -406,7 +414,7 @@ public class RaftNode {
 
 
     /**
-     * 发起选举
+     * 发起选举任务
      */
     class ElectionTask implements Runnable {
 
@@ -439,7 +447,7 @@ public class RaftNode {
             // 发送投票请求
             for (String peer : peerAddrs) {
                 // 执行rpc调用并加入list；添加的是submit的返回值
-                futureList.add(te.submit(() -> {
+                futureList.add(threadPoolExecutor.submit(() -> {
                     long lastLogTerm = 0L;
                     long lastLogIndex = 0L;
                     LogEntry lastLog = logModule.getLast();
@@ -448,7 +456,7 @@ public class RaftNode {
                         lastLogIndex = lastLog.getIndex();
                     }
 
-                    // 封装请求体
+                    /* 封装请求体 */
                     VoteParam voteParam = VoteParam.builder().
                             term(term).
                             candidateAddr(myAddr).
@@ -463,10 +471,9 @@ public class RaftNode {
                             .build();
 
                     try {
-                        // rpc 调用
                         return rpcClient.send(request);
                     } catch (Exception e) {
-                        log.error("ElectionTask RPC Fail , URL : " + request.getUrl());
+                        log.error("ElectionTask RPC Fail, URL : " + request.getUrl());
                         return null;
                     } finally {
                         semaphore.release();
@@ -475,32 +482,30 @@ public class RaftNode {
             }
 
             try {
-                // 等待子线程完成选票统计
-                semaphore.tryAcquire((int) Math.floor((peerAddrs.size() + 1) / 2), 6000, MILLISECONDS);
+                semaphore.tryAcquire((int) Math.floor((peerAddrs.size() + 1) / 2), 6000, MILLISECONDS); // 等待子线程完成选票统计
             } catch (InterruptedException e) {
                 log.warn("election task interrupted by main thread");
             }
 
-            // 统计赞同票的数量
-            int votes = 0;
+            int votes = 0; // 统计赞同票的数量
 
-            // 获取结果
+            /* 获取结果 */
             for (Future<VoteResult> future : futureList) {
                 try {
                     VoteResult result = null;
                     if (future.isDone()) {
                         result = future.get();
                     }
+
                     if (result == null) {
-                        // rpc调用失败或任务超时
-                        continue;
+                        continue; // rpc调用失败或任务超时
                     }
 
                     if (result.isVoteGranted()) {
                         votes++;
                     } else {
-                        // 更新自己的任期
-                        long resTerm =result.getTerm();
+                        /* 更新自己的任期 */
+                        long resTerm = result.getTerm();
                         if (resTerm > term) {
                             term = resTerm;
                             status = NodeStatus.FOLLOWER;
@@ -511,7 +516,7 @@ public class RaftNode {
                 }
             }
 
-            // 如果投票期间有其他服务器发送 appendEntry , 就可能变成 follower
+            /* 如果投票期间有其他服务器发送 appendEntry, 就可能变成 follower */
             if (status == NodeStatus.FOLLOWER) {
                 log.info("election stops with newer term {}", term);
                 updatePreElectionTime();
@@ -519,12 +524,12 @@ public class RaftNode {
                 return;
             }
 
-            // 需要获得超过半数节点的投票
+            /* 需要获得超过半数节点的投票 */
             if (votes * 2 >= peerAddrs.size()) {
                 votedFor = "";
                 status = NodeStatus.LEADER;
                 // 启动心跳任务
-                heartBeatFuture = ss.scheduleWithFixedDelay(heartBeatTask, 0, heartBeatInterval, TimeUnit.MILLISECONDS);
+                heartBeatFuture = scheduledExecutorService.scheduleWithFixedDelay(heartBeatTask, 0, heartBeatInterval, TimeUnit.MILLISECONDS);
                 // 初始化
                 if (leaderInit()) {
                     log.warn("become leader with {} votes", votes);
@@ -636,7 +641,7 @@ public class RaftNode {
 
             preHeartBeatTime = System.currentTimeMillis();
             AppendParam param = AppendParam.builder()
-                    .entries(null)// 心跳,空日志.
+                    .entries(null) // 心跳，空日志
                     .leaderId(myAddr)
                     .term(term)
                     .leaderCommit(getCommitIndex())
@@ -652,7 +657,7 @@ public class RaftNode {
                         peer);
 
                 // 并行发起 RPC 复制并获取响应
-                futureList.add(te.submit(() -> {
+                futureList.add(threadPoolExecutor.submit(() -> {
                     try {
                         AppendResult result = rpcClient.send(request);
                         long resultTerm = result.getTerm();
@@ -713,7 +718,7 @@ public class RaftNode {
      */
     public Future<Boolean> replication(String peer, LogEntry entry, Semaphore semaphore) {
 
-        return te.submit(() -> {
+        return threadPoolExecutor.submit(() -> {
 
             long start = System.currentTimeMillis();
             long end = start;

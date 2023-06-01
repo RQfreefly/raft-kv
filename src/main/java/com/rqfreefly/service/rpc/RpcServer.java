@@ -39,7 +39,7 @@ public class RpcServer {
     /**
      * 1. 判断请求类型
      * 2. 调用node的处理器进行响应
-     * @param request 请求参数.
+     * @param request 请求参数
      * @return
      */
     public Response<?> handlerRequest(Request request) {

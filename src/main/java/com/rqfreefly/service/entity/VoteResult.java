@@ -41,7 +41,7 @@ public class VoteResult implements Serializable {
         return new VoteResult(true);
     }
 
-    public static Builder newBuilder() {
+    public static Builder builder() {
         return new Builder();
     }
 
